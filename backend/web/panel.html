@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Panel operatora – flota hulajnóg</title>
+<link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="/static/panel.css">
+<link rel="icon" href="/static/icons/icon.svg" type="image/svg+xml">
+</head>
+<body>
+<div class="app">
+  <aside>
+    <h1>Flota hulajnóg</h1>
+    <p class="sub">Panel operatora · dane na żywo <span id="connection"></span> · <a href="/">aplikacja klienta</a></p>
+
+    <label class="user">Działasz jako klient
+      <input id="user-id" value="demo-user" maxlength="64" autocomplete="off">
+    </label>
+
+    <div class="cities" id="cities"></div>
+    <div class="legend" id="legend"></div>
+    <p class="hint">
+      <span><i class="ring"></i>wypożyczona / zarezerwowana</span>
+      <span><i class="line"></i>trasa wybranego wypożyczenia</span>
+    </p>
+    <p class="meta" id="meta"></p>
+    <div id="toast" role="status" aria-live="polite"></div>
+    <form id="auth" hidden>
+      <input id="token" type="password" placeholder="Token API operatora" autocomplete="off">
+      <button>Zapisz</button>
+    </form>
+
+    <!-- karta wybranego wypożyczenia -->
+    <section id="ride" hidden aria-live="polite">
+      <div class="ride-head">
+        <b id="ride-title"></b>
+        <button id="ride-close" title="Zamknij" aria-label="Zamknij">×</button>
+      </div>
+      <div class="ride-sub" id="ride-sub"></div>
+      <div class="kpis">
+        <div><span>Czas</span><b id="ride-time">0:00</b></div>
+        <div><span>Dystans</span><b id="ride-distance">0,00 km</b></div>
+        <div><span>Koszt</span><b id="ride-cost">0,00 zł</b></div>
+      </div>
+      <div class="ride-live" id="ride-live"></div>
+      <table class="receipt" id="ride-receipt"></table>
+      <div class="ride-actions" id="ride-actions"></div>
+    </section>
+
+    <h2>Aktywne wypożyczenia <span id="rentals-count" class="muted"></span></h2>
+    <ul class="list" id="rentals"></ul>
+
+    <h2>Rezerwacje <span id="reservations-count" class="muted"></span></h2>
+    <ul class="list" id="reservations"></ul>
+
+    <h2>Historia</h2>
+    <ul class="list" id="history"></ul>
+
+    <h2>Alerty</h2>
+    <ul id="alerts"></ul>
+  </aside>
+  <div id="map" aria-label="Mapa floty"></div>
+</div>
+<script src="/static/vendor/leaflet/leaflet.js"></script>
+<script src="/static/panel.js"></script>
+</body>
+</html>

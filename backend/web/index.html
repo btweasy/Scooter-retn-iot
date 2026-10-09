@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hulaj</title>
+<meta name="description" content="Znajdź, zarezerwuj i wypożycz hulajnogę elektryczną.">
+<meta name="theme-color" content="#0E1B1F">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/static/icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="/static/client.css">
+</head>
+<body>
+
+<!-- ============================================================ 1. ekran startowy -->
+<div id="splash" class="screen dark">
+  <div class="splash-logo">
+    <img src="/static/icons/icon.svg" alt="" width="96" height="96">
+    <h1>Hulaj</h1>
+    <p>Miasto na wyciągnięcie ręki</p>
+  </div>
+  <div class="splash-loader" aria-label="Ładowanie"><i></i></div>
+</div>
+
+<!-- ============================================================ 2. wprowadzenie (tylko przy pierwszym uruchomieniu) -->
+<div id="onboarding" class="screen dark" hidden>
+  <button class="skip" data-ui="finishOnboarding">Pomiń</button>
+  <div class="slides" id="slides">
+    <section class="slide">
+      <svg class="art" viewBox="0 0 240 200" aria-hidden="true">
+        <rect x="20" y="30" width="200" height="140" rx="24" fill="#18303A"/>
+        <path d="M20 110 C80 90 120 150 220 100" stroke="#24434F" stroke-width="14" fill="none"/>
+        <path d="M70 30 V170 M150 30 V170" stroke="#24434F" stroke-width="10"/>
+        <g class="pop"><circle cx="70" cy="80" r="18" fill="#B5F23D"/><text x="70" y="85" text-anchor="middle" font-size="12" font-weight="700" fill="#0E1B1F">7</text></g>
+        <g class="pop d2"><circle cx="160" cy="70" r="18" fill="#B5F23D"/><text x="160" y="75" text-anchor="middle" font-size="12" font-weight="700" fill="#0E1B1F">18</text></g>
+        <g class="pop d3"><circle cx="120" cy="135" r="18" fill="#B5F23D"/><text x="120" y="140" text-anchor="middle" font-size="12" font-weight="700" fill="#0E1B1F">24</text></g>
+        <circle cx="105" cy="100" r="9" fill="#4C8DFF" stroke="#fff" stroke-width="4"/>
+      </svg>
+      <h2>Znajdź hulajnogę obok siebie</h2>
+      <p>Na mapie widzisz wolne hulajnogi z ich numerami. Kliknij, żeby sprawdzić baterię i zasięg.</p>
+    </section>
+    <section class="slide">
+      <svg class="art" viewBox="0 0 240 200" aria-hidden="true">
+        <circle cx="120" cy="100" r="70" stroke="#24434F" stroke-width="16" fill="none"/>
+        <circle class="countdown" cx="120" cy="100" r="70" stroke="#B5F23D" stroke-width="16" fill="none"
+                stroke-linecap="round" stroke-dasharray="440" stroke-dashoffset="110" transform="rotate(-90 120 100)"/>
+        <text x="120" y="108" text-anchor="middle" font-size="30" font-weight="800" fill="#fff">10:00</text>
+      </svg>
+      <h2>Zarezerwuj za darmo</h2>
+      <p>Hulajnoga poczeka na Ciebie 10 minut. W tym czasie nikt inny jej nie wypożyczy.</p>
+    </section>
+    <section class="slide">
+      <svg class="art" viewBox="0 0 240 200" aria-hidden="true">
+        <rect x="30" y="40" width="90" height="120" rx="14" fill="#D6336C" opacity=".25" stroke="#D6336C" stroke-width="4" stroke-dasharray="10 8"/>
+        <path d="M60 85 l30 30 M90 85 l-30 30" stroke="#D6336C" stroke-width="8" stroke-linecap="round"/>
+        <circle cx="175" cy="100" r="40" fill="#B5F23D"/>
+        <path d="M157 100 l13 13 l24 -26" stroke="#0E1B1F" stroke-width="9" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <h2>Jedź, pauzuj, parkuj z głową</h2>
+      <p>Pauza blokuje hulajnogę za pół ceny. Jazdy nie zakończysz w czerwonej strefie zakazu parkowania.</p>
+    </section>
+  </div>
+  <div class="onboarding-footer">
+    <div class="dots" id="dots"><i class="on"></i><i></i><i></i></div>
+    <button class="btn primary" id="onboarding-next" data-ui="nextSlide">Dalej</button>
+  </div>
+</div>
+
+<!-- ============================================================ 3. logowanie (prototyp: tylko imię) -->
+<div id="login" class="screen dark" hidden>
+  <form id="login-form" class="login-card" autocomplete="off">
+    <img src="/static/icons/icon.svg" alt="" width="64" height="64">
+    <h2>Jak masz na imię?</h2>
+    <p>Pod tym imieniem zapiszemy Twoje rezerwacje i przejazdy.</p>
+    <input id="login-name" maxlength="40" placeholder="np. Anna" required enterkeyhint="go">
+    <button class="btn primary wide">Zaczynamy</button>
+    <small>Prototyp pracy inżynierskiej – bez haseł i płatności.</small>
+  </form>
+</div>
+
+<!-- ============================================================ 4. aplikacja: mapa + karta na dole -->
+<div id="app" hidden>
+  <div id="map" aria-label="Mapa hulajnóg"></div>
+
+  <header class="topbar">
+    <button class="avatar" id="avatar" data-ui="openMenu" aria-label="Menu"></button>
+    <div class="hello">
+      <small id="hello-small">Cześć</small>
+      <b id="hello-name"></b>
+    </div>
+    <select id="city" aria-label="Miasto"></select>
+  </header>
+
+  <div class="offline" id="offline" hidden>Brak połączenia z serwerem – próbuję ponownie…</div>
+
+  <div class="fabs">
+    <button class="fab" data-ui="openHistory" aria-label="Moje przejazdy" title="Moje przejazdy">
+      <svg viewBox="0 0 24 24"><path d="M12 7v5l3 2"/><circle cx="12" cy="12" r="9"/></svg>
+    </button>
+    <button class="fab" data-ui="locateMe" aria-label="Moja lokalizacja" title="Moja lokalizacja">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="7.5"/></svg>
+    </button>
+  </div>
+
+  <section id="sheet" class="sheet" aria-live="polite">
+    <div class="handle"></div>
+
+    <!-- przeglądanie: najbliższe hulajnogi -->
+    <div data-view="browse">
+      <div class="sheet-title">
+        <h3>Hulajnogi w pobliżu</h3>
+        <span class="pill" id="available-count"></span>
+      </div>
+      <p class="price-line" id="price-line"></p>
+      <div class="cards" id="nearby"></div>
+    </div>
+
+    <!-- wybrana hulajnoga -->
+    <div data-view="scooter" hidden>
+      <div class="scooter-head">
+        <div class="scooter-art"><img src="/static/icons/icon.svg" alt=""></div>
+        <div>
+          <h3 id="sc-id"></h3>
+          <span class="muted" id="sc-where"></span>
+        </div>
+        <button class="close" data-ui="closeScooter" aria-label="Zamknij">×</button>
+      </div>
+      <div class="stats">
+        <div><span>Bateria</span><b id="sc-battery"></b></div>
+        <div><span>Zasięg</span><b id="sc-range"></b></div>
+        <div><span>Dojście</span><b id="sc-walk"></b></div>
+      </div>
+      <div class="battery"><i id="sc-battery-bar"></i></div>
+      <p class="price-line" id="sc-price"></p>
+      <div class="actions">
+        <button class="btn" data-ui="reserve">Zarezerwuj</button>
+        <button class="btn primary" data-ui="unlock">Odblokuj</button>
+      </div>
+    </div>
+
+    <!-- rezerwacja -->
+    <div data-view="reserved" hidden>
+      <div class="reserved">
+        <svg class="ring" viewBox="0 0 120 120" aria-hidden="true">
+          <circle cx="60" cy="60" r="52" class="ring-bg"/>
+          <circle cx="60" cy="60" r="52" class="ring-fg" id="res-ring"/>
+        </svg>
+        <div class="ring-text"><b id="res-left">10:00</b><span>do końca</span></div>
+      </div>
+      <h3 class="center">Hulajnoga <span id="res-id"></span> czeka na Ciebie</h3>
+      <p class="muted center">Rezerwacja jest bezpłatna. Po czasie hulajnoga wróci do puli.</p>
+      <div class="actions">
+        <button class="btn" data-ui="cancelReservation">Anuluj</button>
+        <button class="btn primary" data-ui="unlockReserved">Odblokuj</button>
+      </div>
+    </div>
+
+    <!-- jazda -->
+    <div data-view="ride" hidden>
+      <div class="ride-head">
+        <span class="chip" id="ride-chip"></span>
+        <span class="muted" id="ride-id"></span>
+      </div>
+      <div class="ride-timer" id="ride-timer">0:00</div>
+      <div class="stats">
+        <div><span>Dystans</span><b id="ride-distance">0,00 km</b></div>
+        <div><span>Koszt</span><b id="ride-cost">0,00 zł</b></div>
+        <div><span>Prędkość</span><b id="ride-speed">0 km/h</b></div>
+      </div>
+      <div class="battery-line"><span id="ride-battery"></span><div class="battery"><i id="ride-battery-bar"></i></div></div>
+      <div class="warning" id="ride-warning" hidden></div>
+      <div class="actions">
+        <button class="btn" id="ride-pause" data-ui="pauseOrResume">Pauza</button>
+        <button class="btn danger" data-ui="endRide">Zakończ jazdę</button>
+      </div>
+    </div>
+
+    <!-- podsumowanie / paragon -->
+    <div data-view="summary" hidden>
+      <div class="done-badge" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+      </div>
+      <h3 class="center" id="sum-title">Dziękujemy za jazdę!</h3>
+      <p class="muted center" id="sum-sub"></p>
+      <div class="stats">
+        <div><span>Czas</span><b id="sum-time"></b></div>
+        <div><span>Dystans</span><b id="sum-distance"></b></div>
+        <div><span>Razem</span><b id="sum-total"></b></div>
+      </div>
+      <table class="receipt" id="sum-receipt"></table>
+      <button class="btn primary wide" data-ui="closeSummary">Gotowe</button>
+    </div>
+  </section>
+
+  <!-- menu boczne -->
+  <div class="backdrop" id="backdrop" data-ui="closeOverlays" hidden></div>
+  <nav class="drawer" id="menu" hidden>
+    <div class="drawer-head">
+      <span class="avatar big" id="menu-avatar"></span>
+      <div><b id="menu-name"></b><br><span class="muted" id="menu-stats"></span></div>
+    </div>
+    <button class="drawer-item" data-ui="openHistory">Moje przejazdy</button>
+    <button class="drawer-item" data-ui="showOnboarding">Jak to działa?</button>
+    <button class="drawer-item" id="install" data-ui="install" hidden>Zainstaluj aplikację</button>
+    <a class="drawer-item" href="/panel">Panel operatora</a>
+    <button class="drawer-item" data-ui="logout">Zmień użytkownika</button>
+    <p class="drawer-foot">Hulaj · prototyp · Uniwersytet Pomorski w Słupsku</p>
+  </nav>
+
+  <!-- historia przejazdów -->
+  <section class="panel" id="history" hidden>
+    <div class="panel-head">
+      <h3>Moje przejazdy</h3>
+      <button class="close" data-ui="closeOverlays" aria-label="Zamknij">×</button>
+    </div>
+    <ul class="history" id="history-list"></ul>
+  </section>
+
+  <!-- token API (gdy serwer go wymaga) -->
+  <form class="panel" id="token-form" hidden>
+    <h3>Serwer wymaga tokenu API</h3>
+    <p class="muted">W wersji produkcyjnej zastąpi go logowanie (JWT).</p>
+    <input id="token" type="password" placeholder="Token API" autocomplete="off">
+    <button class="btn primary wide">Zapisz</button>
+  </form>
+
+  <div id="toast" role="status" aria-live="polite" hidden></div>
+</div>
+
+<script src="/static/vendor/leaflet/leaflet.js"></script>
+<script src="/static/client.js"></script>
+</body>
+</html>

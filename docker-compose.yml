@@ -1,0 +1,67 @@
+# Hasła i token: skopiuj .env.example do .env i zmień wartości. Domyślne wartości poniżej służą
+# wyłącznie do lokalnej demonstracji.
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    ports: ["1883:1883"]
+    environment:
+      MQTT_BACKEND_PASSWORD: ${MQTT_BACKEND_PASSWORD:-backend-dev}
+      MQTT_EMULATOR_PASSWORD: ${MQTT_EMULATOR_PASSWORD:-emulator-dev}
+    # plik haseł generowany przy każdym starcie z wartości .env
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        rm -f /mosquitto/data/passwd
+        mosquitto_passwd -c -b /mosquitto/data/passwd backend "$$MQTT_BACKEND_PASSWORD"
+        mosquitto_passwd -b /mosquitto/data/passwd emulator "$$MQTT_EMULATOR_PASSWORD"
+        chown mosquitto:mosquitto /mosquitto/data/passwd
+        chmod 0700 /mosquitto/data/passwd
+        exec mosquitto -c /mosquitto/config/mosquitto.conf
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./mosquitto/acl:/mosquitto/config/acl:ro
+      - mosquitto-data:/mosquitto/data
+
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: scooters
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-scooters-dev}
+      POSTGRES_DB: scooters
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scooters"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg2://scooters:${POSTGRES_PASSWORD:-scooters-dev}@db:5432/scooters
+      MQTT_HOST: mosquitto
+      MQTT_USERNAME: backend
+      MQTT_PASSWORD: ${MQTT_BACKEND_PASSWORD:-backend-dev}
+      API_TOKEN: ${API_TOKEN:-}
+    depends_on:
+      db: {condition: service_healthy}
+      mosquitto: {condition: service_started}
+    ports: ["8000:8000"]
+
+  emulator:
+    build: ./emulator
+    environment:
+      MQTT_HOST: mosquitto
+      MQTT_USERNAME: emulator
+      MQTT_PASSWORD: ${MQTT_EMULATOR_PASSWORD:-emulator-dev}
+      API_URL: http://backend:8000
+      API_TOKEN: ${API_TOKEN:-}
+    command: ["python", "-u", "emulator.py", "--transport", "mqtt", "--scooters", "30"]
+    depends_on:
+      backend: {condition: service_healthy}
+
+volumes:
+  pgdata:
+  mosquitto-data:

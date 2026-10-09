@@ -1,0 +1,18 @@
+Docker Compose (pełny system: Mosquitto + PostgreSQL + backend + emulator)
+
+    docker compose up --build
+    # po zmianie schematu bazy lub haseł: docker compose down -v  (usuwa dane demo)
+
+
+Lokalnie w PowerShell (SQLite, bez brokera MQTT) – z katalogu projektu:
+
+    cd backend
+    py -3.12 -m pip install -r requirements-dev.txt
+    $env:MQTT_ENABLED="0"; py -3.12 -m uvicorn app.main:app --port 8000
+
+    # drugi terminal
+    cd emulator
+    py -3.12 -m pip install -r requirements.txt
+    py -3.12 emulator.py --transport http
+
+Panel: http://127.0.0.1:8000   Testy: cd backend; py -3.12 -m pytest

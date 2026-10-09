@@ -1,0 +1,13 @@
+# Backend: odbiera telemetrię wszystkich pojazdów, wysyła komendy
+user backend
+topic read scooters/+/telemetry
+topic write scooters/+/command
+
+# Emulator floty: publikuje w imieniu wielu pojazdów
+user emulator
+topic write scooters/+/telemetry
+topic read scooters/+/command
+
+# Pojedyncze urządzenia (np. Raspberry Pi): login = id hulajnogi, dostęp tylko do własnych tematów
+pattern write scooters/%u/telemetry
+pattern read scooters/%u/command

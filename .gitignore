@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+
+# Lokalna baza SQLite i jej kopie
+*.db
+*.db-journal
+*.db.bak
+*.db-journal.bak
+
+# Sekrety
+.env
+
+# IDE / system
+.idea/
+.vscode/
+Thumbs.db
+.DS_Store
+
+# Lokalne kopie zapasowe
+_backup/

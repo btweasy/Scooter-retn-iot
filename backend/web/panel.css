@@ -1,0 +1,106 @@
+:root {
+  --ink: #14262B; --muted: #5B6B72; --panel: #F4F7F8; --line: #D5DEE1;
+  --ok: #1B9E77; --ride: #2F6FDE; --low: #E8A317; --off: #8A98A0; --zone: #D6336C;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; margin: 0; font: 14px/1.45 "Segoe UI", system-ui, sans-serif; color: var(--ink); }
+
+/* układ: panel boczny + mapa */
+.app { display: grid; grid-template-columns: 350px 1fr; height: 100%; }
+aside { background: var(--panel); padding: 18px; overflow: auto; border-right: 1px solid var(--line); }
+#map { height: 100%; }
+@media (max-width: 760px) {
+  .app { grid-template-columns: 1fr; grid-template-rows: 1fr 50vh; }
+  #map { order: -1; }
+  aside { border-right: 0; border-top: 1px solid var(--line); }
+}
+
+h1 { font-size: 20px; margin: 0; }
+h2 { font-size: 14px; margin: 22px 0 8px; }
+.sub { color: var(--muted); margin: 2px 0 12px; }
+.muted { color: var(--muted); font-weight: normal; }
+
+button {
+  font: inherit; border: 1px solid var(--line); background: #fff; color: var(--ink);
+  padding: 5px 10px; border-radius: 6px; cursor: pointer;
+}
+button:hover { border-color: var(--ink); }
+button:focus-visible { outline: 2px solid var(--ride); outline-offset: 2px; }
+button.on, button.primary { background: var(--ink); color: #fff; border-color: var(--ink); }
+button.warn { background: #FFF4E5; border-color: var(--low); }
+
+.user { display: flex; align-items: center; gap: 8px; color: var(--muted); margin-bottom: 12px; }
+.user input, #auth input {
+  flex: 1; min-width: 0; font: inherit; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px;
+}
+.cities { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* legenda statusów */
+.legend { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; margin-top: 16px; }
+.legend div { display: flex; align-items: center; gap: 8px; }
+.legend b { font-size: 20px; line-height: 1; min-width: 26px; }
+.legend span { color: var(--muted); }
+.dot { width: 12px; height: 12px; border-radius: 50%; flex: none; display: inline-block; }
+.hint { display: flex; flex-wrap: wrap; gap: 6px 14px; color: var(--muted); margin: 10px 0 0; font-size: 13px; }
+.hint span { display: flex; align-items: center; gap: 6px; }
+.ring { width: 14px; height: 14px; border-radius: 50%; background: var(--ride); box-shadow: 0 0 0 2.5px var(--ink); flex: none; }
+.line { width: 22px; height: 4px; border-radius: 2px; background: var(--ride); flex: none; }
+.meta { color: var(--muted); margin-top: 12px; }
+#toast { min-height: 20px; font-weight: 600; }
+#auth { display: flex; gap: 6px; margin-top: 8px; }
+
+/* karta wypożyczenia */
+#ride { background: #fff; border: 1px solid var(--line); border-left: 4px solid var(--ride); border-radius: 10px; padding: 12px 14px; margin-top: 12px; }
+#ride.paused { border-left-color: #0C8599; }
+#ride.finished { border-left-color: var(--muted); }
+.ride-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ride-head b { font-size: 16px; }
+#ride-close { border: 0; background: none; font-size: 20px; line-height: 1; padding: 0 4px; color: var(--muted); }
+.ride-sub { color: var(--muted); margin: 2px 0 10px; }
+.badge { display: inline-block; font-size: 12px; font-weight: 600; padding: 1px 7px; border-radius: 9px; background: #E3ECFB; color: var(--ride); }
+.badge.paused { background: #E3F4F6; color: #0C8599; }
+.badge.finished { background: var(--line); color: var(--muted); }
+.kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.kpis div { background: var(--panel); border-radius: 8px; padding: 6px 8px; }
+.kpis span { display: block; font-size: 12px; color: var(--muted); }
+.kpis b { font-size: 19px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ride-live { margin-top: 10px; color: var(--muted); }
+.receipt { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.receipt td { padding: 2px 0; }
+.receipt td:last-child { text-align: right; }
+.receipt tr.total td { border-top: 1px solid var(--line); font-weight: 700; padding-top: 4px; }
+.ride-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.ride-actions button { flex: 1 1 40%; }
+.bar { height: 6px; background: var(--line); border-radius: 3px; margin: 4px 0 8px; overflow: hidden; }
+.bar i { display: block; height: 100%; }
+
+/* listy: wypożyczenia, rezerwacje, historia */
+.list { list-style: none; margin: 0; padding: 0; max-height: 210px; overflow: auto; }
+.list li > button {
+  display: flex; width: 100%; align-items: center; gap: 8px; border: 0; border-bottom: 1px solid var(--line);
+  border-radius: 0; background: none; padding: 7px 4px; text-align: left;
+}
+.list li > button:hover { background: #fff; }
+.list li > button.selected { background: #fff; box-shadow: inset 3px 0 0 var(--ride); }
+.list li.row { display: flex; align-items: center; gap: 8px; padding: 6px 4px; border-bottom: 1px solid var(--line); }
+.list li.row button { padding: 0 8px; }
+.list .who { color: var(--muted); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.list time, .list .amount { font-variant-numeric: tabular-nums; }
+.empty { color: var(--muted); padding: 4px 0; }
+
+/* alerty */
+#alerts { list-style: none; margin: 0; padding: 0; }
+#alerts li { display: flex; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--line); }
+#alerts li > span { flex: 1; }
+#alerts time { color: var(--muted); }
+#alerts button { align-self: flex-start; padding: 2px 8px; }
+
+/* dymek na mapie */
+.popup button { width: 100%; margin-top: 6px; }
+.popup .note { color: var(--muted); margin-top: 4px; }
+
+/* wypożyczone/zarezerwowane znaczniki pulsują */
+.leaflet-interactive.booked { animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 50% { stroke-opacity: .3; } }
+@media (prefers-reduced-motion: reduce) { .leaflet-interactive.booked { animation: none; } }
