@@ -26,8 +26,9 @@ def post_one(message: TelemetryIn, db: Session = Depends(get_db)):
     """Jeden pomiar z jednego pojazdu."""
     result = save_or_503(db, [message])[0]
     return {
-        "accepted": result.status == "accepted",
+        "accepted": result.status in ("accepted", "late"),
         "duplicate": result.status == "duplicate",
+        "late": result.status == "late",
         "commands": commands.pop_pending(message.scooter_id),
     }
 
@@ -44,7 +45,7 @@ def post_batch(body: TelemetryBatchIn, db: Session = Depends(get_db)):
             commands_for_scooters[scooter_id] = waiting
 
     return {
-        "accepted": sum(1 for result in results if result.status == "accepted"),
+        "accepted": sum(1 for result in results if result.status in ("accepted", "late")),
         "duplicates": sum(1 for result in results if result.status == "duplicate"),
         "commands": commands_for_scooters,
     }

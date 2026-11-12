@@ -17,9 +17,13 @@
 1. Pojazd publikuje `scooters/<id>/telemetry` co kilka sekund (QoS 1) z czasem wysłania `sent_at` i numerem `seq`.
 2. Wątek sieciowy MQTT tylko waliduje wiadomość (Pydantic, zgodność `scooter_id` z tematem) i wkłada ją do kolejki.
    Wątek zapisu pobiera partie (do 500 wiadomości / 0,2 s) i zapisuje każdą w jednej transakcji (`ingest.ingest_batch`).
-   Przy błędzie partia jest ponawiana pojedynczo.
-3. `ingest.ingest_message` odrzuca duplikaty i wiadomości spóźnione (`sent_at` ≤ ostatniego), liczy luki w `seq`
-   jako straty, aktualizuje tabelę `scooters`, dopisuje wiersz do `telemetry` i sprawdza alerty (`alerts.py`).
+   Przy błędzie partia jest ponawiana pojedynczo, a gdy baza jest niedostępna – w całości co sekundę.
+   Potwierdzenie QoS 1 (PUBACK) backend wysyła ręcznie dopiero po zapisie (`manual_ack`), więc awaria
+   procesu nie gubi wiadomości czekających w kolejce – broker dostarczy je ponownie.
+3. `ingest.ingest_message` rozpoznaje wiadomość (`ingest.classify`): **nowa** aktualizuje tabelę `scooters`, trafia
+   do `telemetry` i uruchamia alerty (`alerts.py`); **spóźniona** (przyszła po nowszej, np. po zerwaniu łącza)
+   trafia tylko do `telemetry` – potrzebna do trasy, ale nie cofa stanu pojazdu; **duplikat** jest odrzucany.
+   Luki w `seq` liczone są jako straty (spóźniona wiadomość zmniejsza licznik strat).
 4. Panel otrzymuje zrzut stanu przez SSE (`/api/stream`) co 2 s; zrzut jest wspólny dla wszystkich otwartych paneli.
 5. Wypożyczenia (`rentals.py`): rezerwacja → start (komenda `unlock` na `scooters/<id>/command`) ⇄ pauza
    (`lock`/`unlock`) → koniec (odmowa w strefie zakazu, dystans z telemetrii z filtrem szumu GPS, paragon,
@@ -76,6 +80,12 @@ z wypożyczenia, jeśli unlock nie dotrze w 20 s.
 - **Trwała sesja backendu** (`clean_session=False`, stały `MQTT_CLIENT_ID`, persistence brokera) – wiadomości QoS 1
   z czasu przerwy w połączeniu nie giną. Dlatego backend może działać w jednym egzemplarzu na `client_id`.
 - **Kolejka + zapis partiami** – wątek sieciowy MQTT nie czeka na bazę; jedna transakcja na partię zamiast na wiadomość.
+- **Potwierdzenie po zapisie** (`manual_ack=True`) – QoS 1 daje „co najmniej raz” od urządzenia aż do bazy, a powtórzenia
+  odrzuca `ingest.classify` (w efekcie: dokładnie raz). Wymaga większego okna „w locie” u brokera
+  (`max_inflight_messages 1000` w `mosquitto.conf`), bo potwierdzenie przychodzi dopiero po zapisie partii.
+- **Spóźnione wiadomości do historii** – po zerwaniu łącza zaległe wiadomości QoS 1 przychodzą przemieszane z nowymi.
+  Odrzucanie ich gubiło punkty trasy (pomiar w `benchmark/`); teraz trafiają do historii, a trasa jest sortowana
+  wg czasu urządzenia (`rentals.route_points`).
 - **Emulator jako podstawa, sprzęt jako dodatek** – badania na setkach pojazdów bez kosztów sprzętu;
   Raspberry Pi pokazuje wdrożenie na prawdziwym urządzeniu.
 - **Alerty tylko przy zmianie stanu, z histerezą** – brak zalewu powiadomień przy każdym pomiarze.
@@ -93,8 +103,8 @@ z wypożyczenia, jeśli unlock nie dotrze w 20 s.
 
 Token API jest wspólny dla operatora (brak kont użytkowników i JWT – wypożyczenie może zakończyć każdy posiadacz
 tokenu), brak TLS dla MQTT, brak płatności, strefy zakazu zapisane w kodzie (obrysy z OSM, bez edycji w panelu), kolejka komend HTTP i metryki
-w pamięci jednego procesu, wiadomości w kolejce zapisu giną przy awarii procesu (potwierdzenie QoS 1 następuje
-przy przyjęciu do kolejki), telemetria bez agregacji (planowane InfluxDB).
+w pamięci jednego procesu, telemetria bez agregacji (planowane InfluxDB). Wiadomości QoS 0 z czasu awarii backendu
+giną (broker nie przechowuje ich dla rozłączonego subskrybenta).
 
 ## Plan badań
 

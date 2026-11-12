@@ -42,11 +42,14 @@ backend/tests/                testy pytest
 
 1. Emulator (`Scooter.telemetry`) publikuje JSON na `scooters/<id>/telemetry` z QoS 1.
 2. `mqtt_client._handle_message` waliduje go (`TelemetryIn`), sprawdza, czy id zgadza się z tematem,
-   i wkłada do kolejki (`worker.submit`). Nie pisze do bazy – wątek sieciowy musi być szybki.
+   i wkłada do kolejki (`worker.submit`) razem z `Delivery` (numer `mid` do potwierdzenia). Nie pisze do bazy –
+   wątek sieciowy musi być szybki. Nie potwierdza też wiadomości – klient paho działa z `manual_ack=True`.
 3. Wątek `worker._ingest_loop` zbiera partię (do 500 wiadomości lub 0,2 s) i woła `ingest.ingest_batch`:
-   jedna transakcja na całą partię.
-4. `ingest.ingest_message`: odrzuca duplikat/spóźnioną wiadomość (`is_duplicate_or_late`), liczy straty
+   jedna transakcja na całą partię. **Dopiero po commit** `worker._save_batch` potwierdza wiadomości brokerowi
+   (`mqtt_client.acknowledge`). Gdy baza nie działa, partia jest ponawiana co sekundę (`_write_until_database_works`).
+4. `ingest.ingest_message`: `classify` rozpoznaje wiadomość jako nową, spóźnioną albo duplikat. Nowa: liczy straty
    (`count_lost_messages`), aktualizuje wiersz w `scooters`, sprawdza alerty, dopisuje wiersz do `telemetry`.
+   Spóźniona: tylko wiersz w `telemetry`. Duplikat: odrzucony.
 5. Panel ma otwarty strumień `/api/stream` – co 2 s dostaje zrzut stanu (`live.build_snapshot`),
    w którym `status.scooter_status` wylicza kolor każdego pojazdu.
 
@@ -67,7 +70,10 @@ backend/tests/                testy pytest
 
 | Sytuacja | Reakcja | Gdzie |
 |---|---|---|
-| Ta sama wiadomość przyszła dwa razy (QoS 1) | odrzucona, liczona jako duplikat | `ingest.is_duplicate_or_late` |
+| Ta sama wiadomość przyszła dwa razy (QoS 1) | odrzucona, liczona jako duplikat | `ingest.classify` |
+| Starsza wiadomość przyszła po nowszej (po zerwaniu łącza) | zapisana do historii, stanu nie zmienia | `ingest.classify` |
+| Backend padł z wiadomościami w kolejce zapisu | nie były potwierdzone – broker dostarczy je ponownie | `worker._save_batch` |
+| Baza danych niedostępna | partia ponawiana co sekundę, bez potwierdzeń | `worker._write_until_database_works` |
 | Zgubione wiadomości | luka w `seq` liczona jako strata | `ingest.count_lost_messages` |
 | Backend chwilowo rozłączony z brokerem | broker przechowuje wiadomości (trwała sesja) | `mqtt_client.start` |
 | Pojazd przestał nadawać | po 30 s status `offline` | `status.scooter_status` |

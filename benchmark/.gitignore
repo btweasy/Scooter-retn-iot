@@ -1,0 +1,5 @@
+# Bazy SQLite, logi i surowe CSV z przebiegów są duże i odtwarzalne – w repozytorium zostają
+# summary.csv, runs.json i wykresy. (plot.py potrzebuje raw/ do części wykresów – zostaje lokalnie.)
+results/*/db/
+results/*/logs/
+results/*/raw/

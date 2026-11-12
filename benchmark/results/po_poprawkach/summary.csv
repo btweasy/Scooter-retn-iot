@@ -1,0 +1,17 @@
+name,group,condition,condition_label,transport,qos,scooters,offered_per_s,ingest_flush_s,duration_s,generated,delivered,lost,loss_pct,lost_network,lost_backend,rejected_by_client,out_of_order_at_broker,duplicates_at_broker,duplicates_dropped,achieved_per_s,latency_mean_ms,latency_p50_ms,latency_p95_ms,latency_p99_ms,latency_max_ms,started_at
+idealna_qos0,qos,idealna,Sieć idealna,mqtt,0,200,200.0,0.2,30,6000,6000,0,0.0,0,0,0,0,0,0,199.7,189.2,186.1,310.8,424.7,605.8,1794513517.248
+idealna_qos1,qos,idealna,Sieć idealna,mqtt,1,200,200.0,0.2,30,6000,6000,0,0.0,0,0,0,0,0,0,199.7,204.4,198.4,355.2,480.7,585.8,1794513556.352
+opoznienie_qos0,qos,opoznienie,Opóźnienie 80 ± 40 ms,mqtt,0,200,200.0,0.2,30,6000,6000,0,0.0,0,0,0,0,0,0,199.9,274.1,271.4,407.4,494.3,700.9,1794513595.229
+opoznienie_qos1,qos,opoznienie,Opóźnienie 80 ± 40 ms,mqtt,1,200,200.0,0.2,30,6000,6000,0,0.0,0,0,0,0,0,0,200.7,278.9,277.8,404.3,469.0,624.1,1794513634.605
+zerwania_qos0,qos,zerwania,Zerwania łącza (3 s co 10 s),mqtt,0,200,200.0,0.2,30,6000,4795,1205,20.083,1205,0,1200,0,0,0,159.6,174.5,173.2,278.7,334.7,390.4,1794513673.236
+zerwania_qos1,qos,zerwania,Zerwania łącza (3 s co 10 s),mqtt,1,200,200.0,0.2,30,6000,6000,0,0.0,0,0,0,147,0,0,200.5,619.5,241.2,2910.2,3618.9,4081.9,1794513712.666
+restart_brokera_qos0,qos,restart_brokera,Restart brokera,mqtt,0,200,200.0,0.2,30,6000,5797,203,3.383,203,0,201,0,0,0,193.8,256.0,207.8,607.7,1445.0,1623.2,1794513751.333
+restart_brokera_qos1,qos,restart_brokera,Restart brokera,mqtt,1,200,200.0,0.2,30,6000,6000,0,0.0,0,0,0,144,1,126,199.5,445.3,303.2,1264.2,2440.0,3020.7,1794513790.276
+restart_backendu_qos0,qos,restart_backendu,Awaria backendu (5 s),mqtt,0,200,200.0,0.2,30,6000,4415,1585,26.417,0,1585,0,0,0,0,147.9,302.6,234.6,826.6,1174.9,1361.7,1794513828.905
+restart_backendu_qos1,qos,restart_backendu,Awaria backendu (5 s),mqtt,1,200,200.0,0.2,30,6000,6000,0,0.0,0,0,0,0,0,0,199.9,1728.4,309.0,7484.8,8473.1,8706.6,1794513866.441
+obciazenie_200,throughput,idealna,Sieć idealna,mqtt,1,200,200.0,0.2,30,6000,6000,0,0.0,0,0,0,0,0,0,200.8,257.1,210.5,754.7,1350.0,1409.5,1794513912.187
+obciazenie_400,throughput,idealna,Sieć idealna,mqtt,1,400,400.0,0.2,30,12000,12000,0,0.0,0,0,0,0,0,0,396.6,514.8,502.1,769.2,953.4,1093.0,1794513951.661
+obciazenie_600,throughput,idealna,Sieć idealna,mqtt,1,600,600.0,0.2,30,17882,17882,0,0.0,0,0,0,0,0,0,500.9,2545.9,2126.1,6150.8,6367.5,6458.6,1794513991.276
+obciazenie_800,throughput,idealna,Sieć idealna,mqtt,1,800,800.0,0.2,30,24000,24000,0,0.0,0,0,0,0,0,0,617.6,6378.4,6733.8,8664.4,9134.0,9270.6,1794514037.815
+obciazenie_1000,throughput,idealna,Sieć idealna,mqtt,1,1000,1000.0,0.2,30,29998,29998,0,0.0,0,0,0,0,0,0,628.0,9534.9,7570.1,17400.1,17931.3,18037.7,1794514089.662
+obciazenie_1500,throughput,idealna,Sieć idealna,mqtt,1,1500,1500.0,0.2,30,44994,44994,0,0.0,0,0,0,0,0,0,744.8,19018.4,20848.7,29559.5,30237.7,30652.1,1794514147.861

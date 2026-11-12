@@ -11,7 +11,7 @@ from app.metrics import metrics
 from app.models import Telemetry, utcnow
 from app.schemas import TelemetryIn
 from app.ingest import ingest_batch
-from conftest import NO_PARKING, send, wait_for
+from conftest import NO_PARKING, send, start_rental, wait_for
 
 
 def telemetry_count(sid="T-001"):
@@ -33,11 +33,52 @@ def test_duplicate_qos1_message_dropped(client):
     assert telemetry_count() == 1 and metrics.duplicates == 1
 
 
-def test_late_message_does_not_overwrite_state(client):
+def test_late_message_saved_to_history_but_does_not_overwrite_state(client):
     t0 = time.time()
     send(client, lat=54.49, sent_at=t0 + 2, seq=2)
-    send(client, lat=54.48, sent_at=t0 + 1, seq=1)   # spóźniona, starsza
-    assert client.get("/api/scooters").json()[0]["lat"] == 54.49
+    r = send(client, lat=54.48, sent_at=t0 + 1, seq=1).json()   # spóźniona: przyszła po nowszej
+    assert r["accepted"] is True and r["late"] is True
+    assert client.get("/api/scooters").json()[0]["lat"] == 54.49   # stan z nowszej wiadomości
+    assert telemetry_count() == 2                                   # ale punkt jest w historii
+
+
+def test_repeated_late_message_is_duplicate(client):
+    """Po zerwaniu łącza QoS 1 może powtórzyć także starszą wiadomość – nie może trafić do historii dwa razy."""
+    t0 = time.time()
+    send(client, sent_at=t0 + 2, seq=2)
+    send(client, sent_at=t0 + 1, seq=1)
+    assert send(client, sent_at=t0 + 1, seq=1).json()["duplicate"] is True
+    assert telemetry_count() == 2
+
+
+def test_late_message_in_same_batch_twice(client):
+    t0 = time.time()
+    send(client, sent_at=t0 + 5, seq=5)
+    late = TelemetryIn(scooter_id="T-001", city="Słupsk", lat=54.48, lon=17.03, battery=80, speed=0,
+                       sent_at=t0 + 1, seq=1)
+    with SessionLocal() as db:
+        results = ingest_batch(db, [late, late])
+    assert [r.status for r in results] == ["late", "duplicate"] and telemetry_count() == 2
+
+
+def test_late_message_is_not_counted_as_lost(client):
+    t0 = time.time()
+    send(client, sent_at=t0, seq=1)
+    send(client, sent_at=t0 + 2, seq=3)    # luka: 2 wygląda na zgubioną
+    assert metrics.lost == 1
+    send(client, sent_at=t0 + 1, seq=2)    # ...ale jednak dotarła, tylko później
+    assert metrics.lost == 0 and metrics.late == 1
+
+
+def test_route_ordered_by_device_time(client):
+    """Spóźniony punkt trasy trafia na swoje miejsce (czas urządzenia), a nie na koniec."""
+    rid = start_rental(client)
+    t0 = time.time()
+    send(client, lat=54.4800, sent_at=t0 + 1, locked=False)
+    send(client, lat=54.4820, sent_at=t0 + 3, locked=False)
+    send(client, lat=54.4810, sent_at=t0 + 2, locked=False)   # spóźniony środek trasy
+    track = client.get(f"/api/rentals/{rid}").json()["track"]
+    assert [lat for lat, _lon in track][-3:] == [54.4800, 54.4810, 54.4820]
 
 
 def test_seq_gap_counted_as_loss_but_restart_is_not(client):
@@ -100,12 +141,22 @@ def test_no_unauthorized_alert_right_after_rental_end(client):
 
 # --- ścieżka MQTT ---
 
-def mqtt_message(payload, topic=None):
-    """Udaje wiadomość paho-mqtt (ma tylko pola topic i payload)."""
+def mqtt_message(payload, topic=None, mid=1, qos=1):
+    """Udaje wiadomość paho-mqtt (pola topic, payload oraz mid i qos – potrzebne do potwierdzenia)."""
     if isinstance(payload, dict):
         topic = topic or f"scooters/{payload['scooter_id']}/telemetry"
         payload = json.dumps(payload).encode()
-    return SimpleNamespace(topic=topic or "scooters/T-001/telemetry", payload=payload)
+    return SimpleNamespace(topic=topic or "scooters/T-001/telemetry", payload=payload, mid=mid, qos=qos)
+
+
+class FakeBroker:
+    """Udaje klienta paho: zapisuje, które wiadomości (mid) backend potwierdził."""
+
+    def __init__(self):
+        self.acked = []
+
+    def ack(self, mid, qos):
+        self.acked.append(mid)
 
 
 def receive_over_mqtt(message, monkeypatch):
@@ -131,6 +182,53 @@ def test_mqtt_rejects_invalid_and_spoofed_messages(client, monkeypatch):
     worker.flush()
     time.sleep(0.3)
     assert worker.queue_size() == 0 and client.get("/api/scooters").json() == []
+
+
+def test_mqtt_message_acknowledged_only_after_commit(client, monkeypatch):
+    """PUBACK dopiero po zapisie do bazy: gdyby backend padł wcześniej, broker dostarczy wiadomość ponownie."""
+    broker = FakeBroker()
+    monkeypatch.setattr(mqtt_client, "_client", broker)
+    acked_before_write = []
+
+    def ingest_and_check(db, messages):
+        acked_before_write.extend(broker.acked)   # w chwili zapisu nic nie może być jeszcze potwierdzone
+        return ingest_batch(db, messages)
+
+    monkeypatch.setattr(worker, "ingest_batch", ingest_and_check)
+    body = {"scooter_id": "M-1", "city": "Gdańsk", "lat": 54.35, "lon": 18.6, "battery": 70, "speed": 0,
+            "sent_at": time.time(), "seq": 1}
+    receive_over_mqtt(mqtt_message(body, mid=42), monkeypatch)
+    assert wait_for(lambda: broker.acked == [42])
+    assert acked_before_write == [] and telemetry_count("M-1") == 1
+
+
+def test_mqtt_invalid_message_acknowledged_immediately(client, monkeypatch):
+    """Błędnej wiadomości nie ma sensu dostarczać ponownie – potwierdzamy ją od razu, bez zapisu."""
+    broker = FakeBroker()
+    monkeypatch.setattr(mqtt_client, "_client", broker)
+    receive_over_mqtt(mqtt_message(b"{not json", mid=7), monkeypatch)
+    assert broker.acked == [7]
+
+
+def test_batch_retried_while_database_is_down(client, monkeypatch):
+    """Baza niedostępna: partia jest ponawiana i nic nie jest potwierdzane, dopóki zapis się nie uda."""
+    broker = FakeBroker()
+    monkeypatch.setattr(mqtt_client, "_client", broker)
+    monkeypatch.setattr(worker._stop, "wait", lambda seconds: False)   # bez czekania 1 s między próbami
+    attempts = []
+
+    def database_down_twice(db, messages):
+        attempts.append(list(broker.acked))
+        if len(attempts) <= 2:
+            return [SimpleNamespace(status="failed") for _ in messages]
+        return ingest_batch(db, messages)
+
+    monkeypatch.setattr(worker, "ingest_batch", database_down_twice)
+    body = {"scooter_id": "M-1", "city": "Gdańsk", "lat": 54.35, "lon": 18.6, "battery": 70, "speed": 0,
+            "sent_at": time.time(), "seq": 1}
+    receive_over_mqtt(mqtt_message(body, mid=5), monkeypatch)
+    assert wait_for(lambda: broker.acked == [5])
+    assert attempts == [[], [], []] and telemetry_count("M-1") == 1
 
 
 # --- retencja ---

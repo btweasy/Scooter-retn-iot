@@ -48,7 +48,11 @@ class Telemetry(Base):
     lon: Mapped[float] = mapped_column(Float)
     battery: Mapped[float] = mapped_column(Float)
     speed: Mapped[float] = mapped_column(Float)
-    __table_args__ = (Index("ix_telemetry_scooter_ts", "scooter_id", "ts"),)
+    __table_args__ = (
+        Index("ix_telemetry_scooter_ts", "scooter_id", "ts"),
+        # szybkie sprawdzenie, czy spóźniona wiadomość nie jest powtórzeniem (ingest.is_already_saved)
+        Index("ix_telemetry_scooter_sent", "scooter_id", "sent_at"),
+    )
 
 
 class Reservation(Base):
