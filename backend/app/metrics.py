@@ -18,7 +18,8 @@ class Metrics:
     def reset(self):
         with self._lock:
             self.accepted = 0      # zapisane pomiary
-            self.duplicates = 0    # odrzucone: duplikat lub starszy niż ostatni (QoS 1 = "co najmniej raz")
+            self.duplicates = 0    # odrzucone: ta sama wiadomość drugi raz (QoS 1 = "co najmniej raz")
+            self.late = 0          # spóźnione (przyszły po nowszych): zapisane tylko do historii
             self.lost = 0          # szacowane straty: luki w numeracji `seq`
             self._latency.clear()
             self._per_second.clear()
@@ -36,6 +37,18 @@ class Metrics:
             if latency_s is not None:
                 self._latency.append(latency_s)
 
+    def record_late(self, latency_s: float | None = None):
+        """Spóźniona wiadomość. Jej numer był wcześniej luką w `seq`, więc liczono ją jako straconą –
+        skoro jednak dotarła, zmniejszamy licznik strat."""
+        sec = int(time.monotonic())
+        with self._lock:
+            self.accepted += 1
+            self.late += 1
+            self.lost = max(0, self.lost - 1)
+            self._per_second[sec] = self._per_second.get(sec, 0) + 1
+            if latency_s is not None:
+                self._latency.append(latency_s)
+
     def record_duplicate(self):
         with self._lock:
             self.duplicates += 1
@@ -50,7 +63,8 @@ class Metrics:
     def snapshot(self) -> dict:
         with self._lock:
             lat = sorted(self._latency)
-            base = {"accepted": self.accepted, "duplicates": self.duplicates, "lost": self.lost}
+            base = {"accepted": self.accepted, "duplicates": self.duplicates, "late": self.late,
+                    "lost": self.lost}
         if lat:
             p95 = lat[min(len(lat) - 1, math.ceil(0.95 * len(lat)) - 1)]
             latency = {"samples": len(lat), "avg_ms": round(sum(lat) / len(lat) * 1000, 1),

@@ -1,0 +1,2 @@
+# Badania korzystają z zależności backendu (../backend/requirements.txt) oraz:
+matplotlib>=3.9

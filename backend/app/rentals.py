@@ -90,7 +90,7 @@ def route_points(db: Session, rental: Rental, until: datetime | None = None) -> 
     point_time = func.coalesce(Telemetry.sent_at, Telemetry.ts)
     query = (select(Telemetry.lat, Telemetry.lon, point_time)
              .where(Telemetry.scooter_id == rental.scooter_id, Telemetry.ts >= rental.started_at)
-             .order_by(Telemetry.ts, Telemetry.id))
+             .order_by(point_time, Telemetry.id))   # kolejność wg urządzenia: spóźnione punkty na swoje miejsce
     if until is not None:
         query = query.where(Telemetry.ts <= until)
     return db.execute(query).all()

@@ -6,6 +6,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from . import alerts
@@ -18,7 +19,7 @@ log = logging.getLogger("ingest")
 
 @dataclass
 class IngestResult:
-    status: str                       # "accepted" | "duplicate" | "failed"
+    status: str                       # "accepted" | "late" | "duplicate" | "failed"
     scooter_id: str
     latency_s: float | None = None    # opóźnienie: czas zapisu - czas wysłania z urządzenia
     lost_before: int = 0              # ile wiadomości zginęło przed tą (luka w numeracji seq)
@@ -30,13 +31,41 @@ def epoch_to_utc(epoch: float | None) -> datetime | None:
     return datetime.fromtimestamp(epoch, timezone.utc).replace(tzinfo=None)
 
 
-def is_duplicate_or_late(scooter: Scooter, message: TelemetryIn, sent_at: datetime | None) -> bool:
-    """QoS 1 w MQTT gwarantuje dostarczenie "co najmniej raz" – ta sama wiadomość może przyjść dwa razy,
-    a wiadomość spóźniona nie może nadpisać nowszego stanu."""
-    if sent_at is not None and scooter.last_sent_at is not None:
-        return sent_at <= scooter.last_sent_at
-    # urządzenie bez zegara: rozpoznajemy tylko dokładny duplikat po numerze
-    return message.seq is not None and message.seq == scooter.last_seq
+def classify(db: Session, scooter: Scooter, message: TelemetryIn, sent_at: datetime | None) -> str:
+    """Czy wiadomość jest nowa, spóźniona, czy to duplikat?
+
+    QoS 1 w MQTT gwarantuje dostarczenie "co najmniej raz": ta sama wiadomość może przyjść dwa razy.
+    Po zerwaniu połączenia zaległe wiadomości mogą też przyjść PO nowszych (zmieniona kolejność).
+
+      "new"       – nowsza niż ostatnia: aktualizuje stan pojazdu i trafia do historii,
+      "late"      – starsza, ale jeszcze jej nie mamy: tylko do historii (potrzebna do trasy);
+                    stanu nie zmienia – spóźniony pomiar nie może cofnąć pojazdu w czasie,
+      "duplicate" – już zapisana: odrzucamy.
+    """
+    if sent_at is None or scooter.last_sent_at is None:
+        # urządzenie bez zegara: rozpoznajemy tylko dokładny duplikat po numerze
+        if message.seq is not None and message.seq == scooter.last_seq:
+            return "duplicate"
+        return "new"
+    if sent_at > scooter.last_sent_at:
+        return "new"
+    if sent_at == scooter.last_sent_at:
+        return "duplicate"   # najczęstszy przypadek: powtórzona ostatnia wiadomość
+    if is_already_saved(db, scooter.id, sent_at):
+        return "duplicate"
+    return "late"
+
+
+def is_already_saved(db: Session, scooter_id: str, sent_at: datetime) -> bool:
+    """Rzadka ścieżka (tylko starsze wiadomości), więc zapytanie do bazy nie spowalnia zwykłego ruchu."""
+    db.flush()   # uwzględnij też wiadomości z bieżącej, jeszcze niezatwierdzonej partii
+    query = select(Telemetry.id).where(Telemetry.scooter_id == scooter_id, Telemetry.sent_at == sent_at).limit(1)
+    return db.scalar(query) is not None
+
+
+def save_history(db: Session, message: TelemetryIn, now: datetime, sent_at: datetime | None):
+    db.add(Telemetry(scooter_id=message.scooter_id, ts=now, sent_at=sent_at, seq=message.seq,
+                     lat=message.lat, lon=message.lon, battery=message.battery, speed=message.speed))
 
 
 def count_lost_messages(scooter: Scooter, message: TelemetryIn) -> int:
@@ -54,13 +83,20 @@ def ingest_message(db: Session, message: TelemetryIn) -> IngestResult:
     now = utcnow()
     sent_at = epoch_to_utc(message.sent_at)
 
+    latency = (now - sent_at).total_seconds() if sent_at is not None else None
+
     scooter = db.get(Scooter, message.scooter_id)
     is_new = scooter is None
     if is_new:
         scooter = Scooter(id=message.scooter_id, in_zone=False, low_battery_flag=False, unauthorized_flag=False)
         db.add(scooter)
-    elif is_duplicate_or_late(scooter, message, sent_at):
-        return IngestResult("duplicate", message.scooter_id)
+    else:
+        kind = classify(db, scooter, message, sent_at)
+        if kind == "duplicate":
+            return IngestResult("duplicate", message.scooter_id)
+        if kind == "late":
+            save_history(db, message, now, sent_at)
+            return IngestResult("late", message.scooter_id, latency)
 
     lost = 0 if is_new else count_lost_messages(scooter, message)
 
@@ -83,11 +119,7 @@ def ingest_message(db: Session, message: TelemetryIn) -> IngestResult:
     alerts.check_battery(db, scooter, now)
     alerts.check_unauthorized_ride(db, scooter, now)
 
-    # historia
-    db.add(Telemetry(scooter_id=scooter.id, ts=now, sent_at=sent_at, seq=message.seq,
-                     lat=message.lat, lon=message.lon, battery=message.battery, speed=message.speed))
-
-    latency = (now - sent_at).total_seconds() if sent_at is not None else None
+    save_history(db, message, now, sent_at)
     return IngestResult("accepted", message.scooter_id, latency, lost)
 
 
@@ -108,6 +140,8 @@ def ingest_batch(db: Session, messages: list[TelemetryIn]) -> list[IngestResult]
     for result in results:
         if result.status == "accepted":
             metrics.record(result.latency_s, result.lost_before)
+        elif result.status == "late":
+            metrics.record_late(result.latency_s)
         elif result.status == "duplicate":
             metrics.record_duplicate()
     return results
