@@ -284,7 +284,7 @@ def plot_batching(runs: dict, out_dir: Path):
     ax.set_xlabel("INGEST_FLUSH_S – maks. czas zbierania partii [ms]")
     ax.set_ylabel("Opóźnienie [ms] (skala log.)")
     ax.set_title("Opóźnienie a czas zbierania partii")
-    ax.legend(loc="upper left", fontsize=8)
+    ax.legend(loc="lower right", fontsize=8)
 
     ax = axes[1]
     offered = batch_runs[0]["offered_per_s"]
